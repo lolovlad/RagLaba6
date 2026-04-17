@@ -1,157 +1,127 @@
-# RAG-система для анализа финансовых отчётов (Лабораторная работа №6, вариант 7)
+# Лабораторная №6 — Вариант 7
 
-Сервис «вопрос-ответ» по годовому финансовому отчёту (форма 10-K) на базе **Retrieval-Augmented Generation (RAG)**.
+RAG-система для ответов на вопросы по годовому финансовому отчету компании (10-K) с архитектурой Clean Architecture.
 
-## Технологический стек
+## Что реализовано
 
-| Компонент | Технология |
-|-----------|------------|
-| API | FastAPI |
-| Векторная БД | Qdrant |
-| RAG-пайплайн | LangChain (чанкинг) |
-| Парсинг PDF | Docling (текст + таблицы) |
-| Эмбеддинги | sentence-transformers (intfloat/multilingual-e5-base) |
-| LLM | Yandex GPT API |
-| Контейнеризация | Docker, docker-compose |
-
----
-
-## Архитектура RAG
-
-### Offline (индексация)
-
-1. **Парсинг PDF** (Docling): извлечение основного текста и таблиц из отчёта.
-2. **Очистка**: удаление номеров страниц, колонтитулов, повторяющихся заголовков.
-3. **Чанкинг** (LangChain `RecursiveCharacterTextSplitter`): размер чанка 800, overlap 150.
-4. **Эмбеддинги**: модель `intfloat/multilingual-e5-base`, префикс `passage:` для документов.
-5. **Qdrant**: коллекция с метрикой COSINE, в метаданных — `source_file`, `page_number`, тип блока (`text` / `table`).
-
-### Online (запрос)
-
-1. **Эмбеддинг запроса** (та же модель, префикс `query:`).
-2. **Поиск** в Qdrant: top_k=5, объединение текста и таблиц.
-3. **Промпт**: системное сообщение (роль аналитика) + контекст + вопрос.
-4. **Генерация** ответа через Yandex GPT; при недостатке контекста — фраза «В отчете отсутствует достаточная информация для точного ответа.»
-
----
+- Четкое разделение слоев: `Domain`, `Application`, `Infrastructure`, `Presentation`.
+- Загрузка документа через API: `POST /documents/upload`.
+- Поддержка источников в формате `.pdf` и `.html`.
+- Предобработка с `unstructured`: извлечение текста и таблиц.
+- Фильтрация шума: номера страниц, колонтитулы и короткие мусорные строки.
+- Индексация в Qdrant и поиск по эмбеддингам.
+- Генерация ответа по найденному контексту через Yandex GPT.
 
 ## Структура проекта
 
-```
-rag-financial-report/
-├── docs/              # PDF-отчёты (положить сюда 10-K)
-│   ├── report.pdf
-│   └── export/        # после загрузки/индексации: markdown, таблицы, изображения
-│       └── <имя_файла>/
-│           ├── <имя>.md      # весь документ в markdown
-│           ├── tables/       # table_01.md, table_02.md, table_01.csv, ...
-│           └── images/       # image_01.png, image_02.png, ...
-├── utils/
-│   ├── parser.py      # Docling: парсинг PDF, таблицы, очистка
-│   └── prompt_builder.py
-├── .env               # Создать из env.example
-├── docker-compose.yml
-├── Dockerfile
-├── requirements.txt
-├── indexer.py         # Индексация в Qdrant
-├── main.py            # FastAPI: POST /qa, POST /documents/upload
-├── rag_pipeline.py    # FinancialRAG, Yandex GPT
-└── README.md
+- `src/domain` — сущности и интерфейсы.
+- `src/application` — use case-сервисы (индексация, ответ на вопрос).
+- `src/infrastructure` — реализации для `unstructured`, `Qdrant`, `SentenceTransformer`, `Yandex GPT`.
+- `src/presentation` — HTTP-контроллеры FastAPI.
+- `main.py` — точка входа приложения.
+- `indexer.py` — пакетная индексация документов из папки `docs`.
+
+## Настройка
+
+Создайте локальный `.env` из шаблона:
+
+```powershell
+Copy-Item .env.example .env
 ```
 
----
+### Все переменные `.env`
+
+- `QDRANT_HOST` — хост Qdrant (локально обычно `localhost`, в Docker-сети `qdrant`).
+- `QDRANT_PORT` — HTTP-порт Qdrant (`6333`).
+- `QDRANT_COLLECTION` — имя коллекции, куда пишутся чанки.
+- `QDRANT_TIMEOUT` — таймаут операций с Qdrant в секундах.
+- `QDRANT_BATCH_SIZE` — размер батча при upsert в Qdrant.
+- `PDF_PARSE_BATCH_PAGES` — сколько страниц PDF читать в одном fallback-батче.
+- `DOCLING_MAX_PDF_PAGES` — порог страниц, после которого включается более экономный режим парсинга.
+- `EMBEDDING_BATCH_SIZE` — размер батча при генерации эмбеддингов.
+- `YANDEX_API_KEY` — API-ключ Yandex Cloud (секрет, не коммитить).
+- `YANDEX_FOLDER_ID` — ID каталога Yandex Cloud.
+- `YANDEX_LLM_BASE_URL` — endpoint LLM API.
+- `YANDEX_MODEL_FALLBACK` — URI модели YandexGPT.
+- `DOCS_PATH` — папка с исходными документами.
+- `OCR_LANGS` — языки OCR через запятую (например `ru,en`).
+- `OCR_USE_GPU` — использовать GPU для OCR (`true/false`).
+
+Важно: `.env` должен оставаться только локальным файлом, в git хранится только `.env.example`.
 
 ## Запуск
-
-### 1. Переменные окружения
-
-Скопируйте пример и заполните:
-
-```bash
-cp .env .env
-```
-
-В `.env` укажите:
-
-- `QDRANT_HOST`, `QDRANT_PORT`, `QDRANT_COLLECTION` (для Docker: хост `qdrant`, порт `6333`).
-- `YANDEX_API_KEY`, `YANDEX_FOLDER_ID` — ключ и каталог Yandex Cloud для Yandex GPT.
-- `YANDEX_MODEL` — например `yandexgpt-lite`.
-- `DOCS_PATH` — путь к папке с PDF (по умолчанию `./docs`).
-
-### 2. Запуск сервисов
 
 ```bash
 docker-compose up --build
 ```
 
-Поднимаются:
-
-- **Qdrant** — порт 6333.
-- **API** — порт 8000.
-
-### 3. Загрузка документов (индексация)
-
-**Через API (рекомендуется):**
-
-Загрузите PDF через endpoint — файл сохранится в `docs/` и будет проиндексирован в Qdrant:
+Или локально:
 
 ```bash
-curl -X POST "http://localhost:8000/documents/upload" ^
-  -H "Accept: application/json" ^
-  -F "file=@C:\path\to\report.pdf"
+poetry install
+poetry run uvicorn main:app --reload --host 127.0.0.1 --port 8001
 ```
 
-Ответ:
+## Настройка GPU (PyTorch CUDA 12.8)
 
-```json
-{
-  "filename": "report.pdf",
-  "chunks_indexed": 142,
-  "status": "ok"
-}
+Для вашего сценария (Docling OCR + эмбеддинги + большие PDF) рекомендуется запускать на GPU.
+
+На CPU обработка может занимать **очень много времени** (десятки минут на один документ) и чаще приводит к таймаутам/ошибкам памяти.
+
+### 1) Установить CUDA-версию PyTorch
+
+Требуемая версия:
+
+- `torch==2.7.1+cu128`
+
+В проекте есть готовый скрипт для Windows PowerShell:
+
+```powershell
+.\scripts\setup_torch_gpu.ps1
 ```
 
-**Через скрипт (опционально):**
+Скрипт:
 
-1. Положите PDF в папку `docs/`.
-2. На хосте выполните:
+- удаляет CPU-вариант torch (если был),
+- ставит `torch/torchvision/torchaudio` из индекса CUDA 12.8,
+- проверяет, что `torch.cuda.is_available() == True`.
+
+### 2) Проверка GPU вручную
+
+```powershell
+poetry run python -c "import torch; print(torch.__version__); print(torch.cuda.is_available()); print(torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'no_gpu')"
+```
+
+Ожидается:
+
+- версия содержит `+cu128`
+- `True` для CUDA availability.
+
+### 3) OCR на GPU
+
+В `.env`:
+
+```env
+OCR_USE_GPU=true
+OCR_LANGS=ru,en
+```
+
+После изменения перезапустите сервер:
+
+```powershell
+poetry run python start_server.py
+```
+
+## Примеры API
+
+Загрузка отчета:
 
 ```bash
-set QDRANT_HOST=localhost
-set QDRANT_PORT=6333
-python indexer.py
+curl -X POST "http://localhost:8000/documents/upload" -F "file=@C:\path\to\10k.pdf"
 ```
 
-Пересоздать коллекцию с нуля: `python indexer.py --recreate`.
-
-### 4. Проверка API
-
-**Пример запроса (curl):**
+Вопрос по отчету:
 
 ```bash
-curl -X POST "http://localhost:8000/qa" ^
-  -H "Content-Type: application/json" ^
-  -d "{\"question\": \"Какой был чистый доход компании в 2023 году?\"}"
+curl -X POST "http://localhost:8000/qa" -H "Content-Type: application/json" -d "{\"question\":\"What was net income in 2023?\"}"
 ```
-
-**Пример ответа:**
-
-```json
-{
-  "answer": "По отчёту за 2023 год чистый доход компании составил ...",
-  "sources": [
-    {"page": 12, "type": "table"},
-    {"page": 45, "type": "text"}
-  ]
-}
-```
-
----
-
-## Дополнительно
-
-- **Таблицы**: извлекаются Docling и сохраняются в виде текста и markdown; участвуют в чанкинге и поиске.
-- **Метаданные**: в ответе API возвращаются `sources` с полями `page` и `type` (text/table).
-- **Код**: разнесён по модулям (парсер, промпт, индексер, RAG-пайплайн, API), без сокращений, готов к доработке.
-
-После генерации: положите 10-K в `docs/`, запустите `docker-compose up --build`, выполните `python indexer.py`, проверьте через curl.
