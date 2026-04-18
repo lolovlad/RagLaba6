@@ -1,28 +1,4 @@
-services:
-  qdrant:
-    image: qdrant/qdrant:v1.12.1
-    ports:
-      - "6333:6333"
-      - "6334:6334"
-    volumes:
-      - qdrant_storage:/qdrant/storage
-    environment:
-      QDRANT__SERVICE__GRPC_PORT: 6334
-
-  api:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    ports:
-      - "8000:8000"
-    env_file:
-      - .env
-    environment:
-      QDRANT_HOST: qdrant
-      QDRANT_PORT: 6333
-    depends_on:
-      - qdrant
-    restart: unless-stopped
-
-volumes:
-  qdrant_storage:
+# По умолчанию — CPU-стек (см. docker-compose.cpu.yml).
+# GPU: docker compose -f docker-compose.cuda.yml up --build
+include:
+  - path: docker-compose.cpu.yml

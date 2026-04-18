@@ -7,7 +7,7 @@ readme = "README.md"
 package-mode = false
 
 [tool.poetry.dependencies]
-python = ">=3.11,<3.14"
+python = ">=3.12,<3.14"
 fastapi = ">=0.115.0"
 uvicorn = {version = ">=0.32.0", extras = ["standard"]}
 qdrant-client = ">=1.12.0"

@@ -42,7 +42,7 @@ class DocumentIndexingService:
                 total_batches,
                 len(batch),
             )
-            vectors.extend(self._embedding_service.embed_passage(chunk.text) for chunk in batch)
+            vectors.extend(self._embedding_service.embed_passages([c.text for c in batch]))
         log.info("[Indexing] Embeddings ready: count=%s", len(vectors))
         log.info("[Indexing] Stage 4/4: upsert to Qdrant")
         inserted = self._vector_store_service.index_chunks(chunks=chunks, vectors=vectors)

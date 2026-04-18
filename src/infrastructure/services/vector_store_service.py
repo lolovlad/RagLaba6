@@ -2,7 +2,6 @@ import os
 import uuid
 import logging
 
-from dotenv import load_dotenv
 from qdrant_client import QdrantClient, models
 
 from src.domain.entities.document_chunk import DocumentChunk
@@ -13,7 +12,6 @@ log = logging.getLogger(__name__)
 
 class QdrantVectorStoreService(IVectorStoreService):
     def __init__(self) -> None:
-        load_dotenv()
         self._host = os.getenv("QDRANT_HOST", "localhost")
         self._port = int(os.getenv("QDRANT_PORT", "6333"))
         self._collection_name = os.getenv("QDRANT_COLLECTION", "financial_reports_10k")

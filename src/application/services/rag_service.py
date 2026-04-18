@@ -28,7 +28,20 @@ class RagService(IRagService):
                 answer="В отчете отсутствует достаточная информация для точного ответа.",
                 sources=[],
             )
-        context = "\n\n---\n\n".join((hit.get("payload") or {}).get("text", "") for hit in hits)
+        context_parts: list[str] = []
+        for i, hit in enumerate(hits, start=1):
+            payload = hit.get("payload") or {}
+            text = (payload.get("text") or "").strip()
+            if not text:
+                continue
+            src = payload.get("source_file", "unknown")
+            page = payload.get("page_number")
+            ctype = payload.get("chunk_type", payload.get("type", "text"))
+            page_str = f", стр. {page}" if page is not None else ""
+            context_parts.append(
+                f"[Фрагмент {i} | файл: {src}{page_str} | тип: {ctype}]\n{text}"
+            )
+        context = "\n\n---\n\n".join(context_parts)
         answer = self._llm_service.generate_answer(question=request.question, context=context)
         sources: list[SourceItem] = []
         for hit in hits:

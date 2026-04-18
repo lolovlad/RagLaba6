@@ -1,9 +1,56 @@
+# VCS
 .git
+.gitignore
+.gitattributes
+
+# Secrets and local env (never bake into image)
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Poetry / pip
+.poetry/
+pip-wheel-metadata/
+
+# IDE / OS
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Compose (не нужны внутри образа; уменьшают контекст)
+docker-compose*.yml
+
+# Docs: large PDFs / exports — mount or copy separately if needed
+docs/
 *.pdf
-docs
-__pycache__
-*.pyc
-.venv
-venv
+
+# Local runtime data
+qdrant_storage/
+huggingface/
+*.log
+*.tmp
+
+# Tests and dev-only
+tests/
+**/tests/
+
+# Markdown except README (optional docs in image)
 *.md
 !README.md

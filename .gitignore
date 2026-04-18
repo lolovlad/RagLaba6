@@ -10,5 +10,8 @@ __pycache__/
 *.log
 *.tmp
 docs/export/
+# Не коммитить тяжёлые отчёты и PDF с ограничениями лицензии — кладите локально.
+docs/**/*.pdf
+docs/**/*.PDF
 qdrant_storage/
 huggingface/
